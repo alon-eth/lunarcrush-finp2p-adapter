@@ -1,0 +1,31 @@
+{
+  "name": "@dgb/lunarcrush-finp2p-adapter",
+  "version": "0.2.0",
+  "private": true,
+  "description": "FinP2P Data Provider Adapter that serves LunarCrush social intelligence to Ownera Routers",
+  "type": "module",
+  "scripts": {
+    "adapter": "tsx src/server.ts",
+    "mock-router": "tsx mock-router/index.ts",
+    "smoke": "tsx src/smoke.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/src/server.js",
+    "push": "tsx src/push.ts",
+    "keygen": "tsx src/keygen.ts"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.3.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alon-eth/lunarcrush-finp2p-adapter"
+  }
+}

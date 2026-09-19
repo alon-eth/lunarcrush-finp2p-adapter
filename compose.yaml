@@ -1,0 +1,15 @@
+# Local end-to-end: adapter + a mock Router ingest endpoint.
+#   docker compose up --build   then   curl -X POST localhost:4100/assets/data -H 'content-type: application/json' -d '{"filter":{"dataTypes":["socialSentiment"]}}'
+services:
+  mock-router:
+    build: .
+    command: ["node", "dist/mock-router/index.js"]
+    ports: ["4101:4101"]
+  adapter:
+    build: .
+    environment:
+      ROUTER_INGEST_URL: http://mock-router:4101/data/assets/ingest
+      LUNARCRUSH_API_KEY: ${LUNARCRUSH_API_KEY:-}
+      REFRESH_SECONDS: "3600"
+    ports: ["4100:4100"]
+    depends_on: [mock-router]
