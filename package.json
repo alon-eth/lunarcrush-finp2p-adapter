@@ -1,6 +1,6 @@
 {
   "name": "@dgb/lunarcrush-finp2p-adapter",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "FinP2P Data Provider Adapter that serves LunarCrush social intelligence to Ownera Routers",
   "type": "module",

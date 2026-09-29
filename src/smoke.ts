@@ -23,7 +23,9 @@ for (const k of keys.slice(0, 4)) console.log(" ", k, JSON.stringify(stored[k].d
 
 const un = await fetch(`${A}/assets/data/unsubscribe`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ subscriptionId }) });
 console.log("unsubscribe ->", un.status);
-if (keys.length < 12) { console.error("FAIL: expected at least 12 items"); process.exit(1); }
+// 3 pulled + 9 ISIN subscribed, minus COIN which is in both = 11 socialSentiment items; nothing else may appear
+if (keys.length < 11) { console.error("FAIL: expected at least 11 items"); process.exit(1); }
+if (keys.some(k => !k.endsWith("#socialSentiment"))) { console.error("FAIL: adapter pushed a data type it does not serve"); process.exit(1); }
 console.log("SMOKE OK");
 
 export {};

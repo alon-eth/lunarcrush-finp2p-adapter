@@ -1,8 +1,17 @@
 /**
  * Pushes data into the Router's POST /data/assets/ingest (Ownera Data Provider Adapter API).
- * Auth: Ownera's docs describe a one-time RS256 JWT (aud=orgId, sub=apiKey, iat, exp=iat+30s,
- * nonce=24 random bytes + 8 byte epoch). We implement that. The ingest page also describes an
- * older base64 bearer; confirm with Ownera which one the ingest path enforces.
+ *
+ * Auth (confirmed by Ownera, 2026-09-29): the ingest path accepts the one-time RS256 JWT only.
+ * Claims: aud=orgId, sub=apiKey, apiKey=apiKey (the auth service reads `apiKey`), iat,
+ * exp=iat+30s, nonce=timestampedNonce(). The legacy base64 bearer is kept for reference but the
+ * Router rejects it; ROUTER_AUTH defaults to jwt.
+ *
+ * Idempotency-Key must use the same format as the JWT nonce: 24 random bytes followed by the
+ * epoch seconds as an 8-byte big-endian integer, hex-encoded. The Router reads the trailing 8
+ * bytes as a timestamp; a purely random key reads as an expired one about half the time.
+ *
+ * Connector mode: installed inside a Router, push to http://finp2p-node/data/assets/ingest with
+ * ROUTER_AUTH=none. The JWT is only for pushing from outside the Router.
  */
 import { createSign, randomBytes } from "node:crypto";
 import { createRequire } from "node:module";
@@ -22,20 +31,25 @@ export interface IngestResult {
 
 function b64url(b: Buffer | string) { return Buffer.from(b).toString("base64url"); }
 
+/** 24 random bytes + epoch seconds (8-byte big-endian), hex. Used for the JWT nonce and the Idempotency-Key. */
+export function timestampedNonce(now = Date.now()): string {
+  const n = Buffer.concat([randomBytes(24), Buffer.alloc(8)]);
+  n.writeBigUInt64BE(BigInt(Math.floor(now / 1000)), 24);
+  return n.toString("hex");
+}
+
 export function routerJwt(orgId: string, apiKey: string, privateKeyPem: string): string {
   const iat = Math.floor(Date.now() / 1000);
-  const nonce = Buffer.concat([randomBytes(24), Buffer.alloc(8)]);
-  nonce.writeBigUInt64BE(BigInt(iat), 24);
   const header = b64url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const payload = b64url(JSON.stringify({ aud: orgId, sub: apiKey, iat, exp: iat + 30, nonce: nonce.toString("hex") }));
+  // `apiKey` is the claim the auth service reads; `sub` kept for the documented shape.
+  const payload = b64url(JSON.stringify({ aud: orgId, sub: apiKey, apiKey, iat, exp: iat + 30, nonce: timestampedNonce(iat * 1000) }));
   const sig = createSign("RSA-SHA256").update(`${header}.${payload}`).sign(privateKeyPem);
   return `${header}.${payload}.${b64url(sig)}`;
 }
 
 /**
- * Alternative bearer described on the ingest reference page: base64 JSON with
- * organization, apiKey, nonce, timestamp and an accessToken = sign("{apiKey}{nonce}{timestamp}").
- * Kept so either scheme can be selected with ROUTER_AUTH=jwt|legacy|none.
+ * Base64 bearer from the ingest reference page. Ownera confirmed the ingest path does NOT accept
+ * it (401); kept only so ROUTER_AUTH=legacy still produces something inspectable.
  */
 export function routerLegacyBearer(orgId: string, apiKey: string, privateKeyPem: string): string {
   const timestamp = Math.floor(Date.now() / 1000);
@@ -73,7 +87,7 @@ export class RouterIngest {
   async push(body: IngestRequest): Promise<IngestResult> {
     const headers: Record<string, string> = {
       "content-type": "application/json",
-      "idempotency-key": randomBytes(32).toString("hex"),
+      "idempotency-key": timestampedNonce(),
     };
     const auth = this.authHeader(); if (auth) headers.authorization = auth;
     const res = await fetch(this.url, { method: "POST", headers, body: JSON.stringify(body) });

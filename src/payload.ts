@@ -10,7 +10,12 @@ import type { AssetDataItem, IngestRequest } from "./ingest.js";
 export const SOURCE = "lunarcrush";
 export const SCHEMA_REF = process.env.SCHEMA_REF ?? "https://ownera.io/certificates/data/socialSentiment.schema.json";
 export const METHODOLOGY = "https://lunarcrush.com/about/metrics";
-export const SUPPORTED = new Set(["assetHeader", "socialSentiment"]);
+/**
+ * A data provider sends only its own data type. assetHeader and pricing come from the asset's
+ * catalog/pricing providers; Routers subscribe every bound provider to those by default, so we
+ * accept such subscriptions and push nothing for them (build() returns no items).
+ */
+export const SUPPORTED = new Set(["socialSentiment"]);
 
 export type Scope = { type: "byType"; identifierType: "ISIN" | "CAIP19" } | { type: "byIdentifiers"; identifiers: AssetIdentifier[] };
 export interface Filter { assets?: Scope; dataTypes: string[]; }
@@ -44,10 +49,6 @@ export async function build(lc: LunarCrush, filter: Filter): Promise<IngestReque
   const out: IngestRequest["assets"] = [];
   for (const { identifier, target } of selectAssets(filter.assets)) {
     const data: AssetDataItem[] = [];
-    if (types.includes("assetHeader")) {
-      data.push({ dataType: "assetHeader", source: SOURCE, timestamp: Date.now(),
-        data: { name: target.name, symbol: target.symbol, provider: SOURCE, dataTypes: ["socialSentiment"] } });
-    }
     if (types.includes("socialSentiment")) {
       const s = await lc.snapshot(target);
       data.push({ dataType: "socialSentiment", schemaRef: SCHEMA_REF, source: SOURCE, timestamp: s.asOf, data: toSocialSentiment(s) });

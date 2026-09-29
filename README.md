@@ -35,12 +35,31 @@ npm install
 npm run keygen                      # writes keys/private.pem (keep) and keys/public.pem (send to Ownera)
 npm run push -- --dry-run           # print the exact payload, send nothing
 
-ROUTER_INGEST_URL=https://<router>/data/assets/ingest \
+ROUTER_INGEST_URL=https://<router>/finapi/data/assets/ingest \
 ROUTER_ORG_ID=<org> ROUTER_API_KEY=<key> ROUTER_PRIVATE_KEY_FILE=keys/private.pem \
 ROUTER_AUTH=jwt npm run push -- --assets COIN,BTC,USDC
 ```
 
-`ROUTER_AUTH` selects the bearer: `jwt` (single-use RS256 token, 30 s, per the Authorization reference), `legacy` (the base64 JSON bearer described on the ingest reference page) or `none`. The CLI prints the Router's per-item `accepted` / `rejected` results and exits non-zero if everything was rejected.
+The CLI prints the Router's per-item `accepted` / `rejected` results and exits non-zero if everything was rejected.
+
+What the real Router enforces (confirmed by Ownera against production Routers, 29 Sep 2026):
+
+- **Auth:** the one-time RS256 JWT only. Claims `aud` = org ID, `sub` and `apiKey` = API key (the auth service reads `apiKey`), `iat`, `exp` = `iat` + 30 s, `nonce`. The base64 bearer on the ingest reference page is rejected. `ROUTER_AUTH=jwt` is the default; `none` is for connector mode or a test Router with auth off.
+- **Idempotency-Key:** same format as the JWT nonce, 24 random bytes then the epoch seconds as an 8-byte big-endian integer, hex-encoded. The Router reads the trailing 8 bytes as a timestamp. `src/ingest.ts#timestampedNonce` produces both.
+- **Data types:** a data provider sends only its own type. `socialSentiment` is the only type this adapter emits. Routers subscribe every bound provider to `assetHeader` and pricing by default; those subscriptions are accepted and nothing is pushed for them.
+- **Schema:** `socialSentiment` validates against the schema in [owneraio/finp2p-certificates-spec#45](https://github.com/owneraio/finp2p-certificates-spec/pull/45). A standard Router accepts the type once that PR is merged.
+
+## Connector mode
+
+Installed inside a Router (Ownera's install-connector template), the adapter pushes straight to the node with no credentials:
+
+```
+ROUTER_INGEST_URL=http://finp2p-node/data/assets/ingest
+ROUTER_AUTH=none
+SUBSCRIPTIONS_FILE=/app/data/subscriptions.json   # mount /app/data so subscriptions survive restarts
+```
+
+Subscriptions are written to `SUBSCRIPTIONS_FILE` on subscribe/unsubscribe and re-armed on startup, so a pod restart does not leave the Router believing in a subscription the adapter has forgotten.
 
 ## Payload shape
 
@@ -48,17 +67,17 @@ One `socialSentiment` item per asset per push, following the proposed spec: top-
 
 ## Layout
 
-- `src/server.ts` adapter HTTP surface (pull, subscribe, unsubscribe, health)
+- `src/server.ts` adapter HTTP surface (pull, subscribe, unsubscribe, health); subscriptions persisted to `SUBSCRIPTIONS_FILE`
 - `src/payload.ts` builds ingest payloads in the spec shape
-- `src/ingest.ts` Router ingest client, JWT and legacy bearer builders
+- `src/ingest.ts` Router ingest client, RS256 JWT + timestamped Idempotency-Key
 - `src/push.ts` one-shot ingest CLI; `src/keygen.ts` RSA-4096 keypair
 - `src/mapping.ts` ISIN / CAIP-19 to LunarCrush symbols; `src/lunarcrush.ts` v4 client with fixture fallback
-- `mock-router/` local stand-in for a Router's ingest endpoint with an HTML view
+- `mock-router/` local stand-in for a Router's ingest endpoint with an HTML view; enforces the real idempotency-key format and rejects `assetHeader`
 - `schemas/socialSentiment.schema.json` the proposed data schema
 - `Dockerfile`, `compose.yaml`, `.github/workflows/docker.yml` (publishes `ghcr.io/alon-eth/lunarcrush-finp2p-adapter` on push to main)
 
 ## Not done yet
 
-Full-catalog mode (bulk LunarCrush list endpoints, OpenFIGI ISIN lookup, coin-metadata contract lookup), `socialNarrative` / `socialTimeSeries` / `creatorInfluence` data types, and batch signing for provenance. All wait on a sandbox Router and a LunarCrush key.
+Full-catalog mode (bulk LunarCrush list endpoints, OpenFIGI ISIN lookup, coin-metadata contract lookup), `socialNarrative` / `socialTimeSeries` / `creatorInfluence` data types, and batch signing for provenance. All wait on a LunarCrush key (fixture mode until then).
 
 Apache-2.0. Built by the Draper Goren Blockchain venture studio.

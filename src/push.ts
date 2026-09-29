@@ -3,7 +3,7 @@
  *
  *   npm run push -- --dry-run                      print the payload, send nothing
  *   npm run push -- --assets COIN,BTC              push only these symbols
- *   npm run push -- --types assetHeader            only coverage headers
+ *   npm run push -- --types socialSentiment        (default; the only type this provider serves)
  *   ROUTER_INGEST_URL=https://<router>/data/assets/ingest ROUTER_ORG_ID=... ROUTER_API_KEY=... \
  *   ROUTER_PRIVATE_KEY_FILE=keys/private.pem ROUTER_AUTH=jwt npm run push
  */
@@ -17,7 +17,7 @@ const args = process.argv.slice(2);
 const flag = (n: string) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined; };
 const dry = args.includes("--dry-run");
 const symbols = flag("--assets")?.split(",").map(x => x.trim().toUpperCase());
-const types = flag("--types")?.split(",").map(x => x.trim()) ?? ["assetHeader", "socialSentiment"];
+const types = flag("--types")?.split(",").map(x => x.trim()) ?? ["socialSentiment"];
 
 const chosen = coverage().filter(a => !symbols || symbols.includes(a.target.symbol));
 if (!chosen.length) { console.error("no assets matched", symbols); process.exit(2); }
