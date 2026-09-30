@@ -49,6 +49,16 @@ What the real Router enforces (confirmed by Ownera against production Routers, 2
 - **Data types:** a data provider sends only its own type. `socialSentiment` is the only type this adapter emits. Routers subscribe every bound provider to `assetHeader` and pricing by default; those subscriptions are accepted and nothing is pushed for them.
 - **Schema:** `socialSentiment` validates against the schema in [owneraio/finp2p-certificates-spec#45](https://github.com/owneraio/finp2p-certificates-spec/pull/45). A standard Router accepts the type once that PR is merged.
 
+## Data modes: try it on DGB's key, run it on yours
+
+| Mode | When | Path | Cap |
+|---|---|---|---|
+| `own-key` | `LUNARCRUSH_API_KEY` set (Builder tier or above) | adapter → lunarcrush.com directly | none; your LunarCrush terms govern the data |
+| `trial` | no key (the default in the connector template) | adapter → DGB's trial gateway → LunarCrush, metered per `ROUTER_ORG_ID` | 2,000 upstream calls per Router per day, 50 assets, hourly refresh; LunarCrush can raise it per partner |
+| `fixture` | `LUNARCRUSH_MODE=fixture`, or the gateway is not enabled | no network | deterministic values for plumbing tests |
+
+`GET /health` reports `dataMode` and, in trial mode, `trial: {enabled, cap, remaining, assetCap, resetsAt}`. When the daily cap is reached the gateway answers 429; the adapter stops pushing for the rest of the run, logs the upgrade link, and resumes at 00:00 UTC. DGB's key never ships in the image; it lives only on the gateway (`../lc-trial-gateway`). Terms: https://www.alongoren.com/superapp/#terms
+
 ## Connector mode
 
 Installed inside a Router (Ownera's install-connector template), the adapter pushes straight to the node with no credentials:
@@ -78,6 +88,6 @@ One `socialSentiment` item per asset per push, following the proposed spec: top-
 
 ## Not done yet
 
-Full-catalog mode (bulk LunarCrush list endpoints, OpenFIGI ISIN lookup, coin-metadata contract lookup), `socialNarrative` / `socialTimeSeries` / `creatorInfluence` data types, and batch signing for provenance. All wait on a LunarCrush key (fixture mode until then).
+Full-catalog mode (bulk LunarCrush list endpoints, OpenFIGI ISIN lookup, coin-metadata contract lookup), `socialNarrative` / `socialTimeSeries` / `creatorInfluence` data types, and batch signing for provenance. All wait on production access on a LunarCrush key.
 
 Apache-2.0. Built by the Draper Goren Blockchain venture studio.

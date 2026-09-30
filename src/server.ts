@@ -24,6 +24,7 @@ import { build, SOURCE, SUPPORTED, type Filter } from "./payload.js";
 
 const lc = new LunarCrush();
 const router = new RouterIngest();
+lc.refreshTrialStatus().then(t => { if (lc.mode === "trial") console.log(`[adapter] trial tier for org ${process.env.ROUTER_ORG_ID ?? "unknown"}: enabled=${t.enabled} cap=${t.cap} remaining=${t.remaining} assetCap=${t.assetCap}`); });
 const SUBS_FILE = process.env.SUBSCRIPTIONS_FILE ?? "data/subscriptions.json";
 const REFRESH_MS = Number(process.env.REFRESH_SECONDS ?? 3600) * 1000;
 
@@ -70,7 +71,7 @@ const app = express();
 app.use(express.json());
 
 app.get("/health", (_q, r) => r.json({
-  status: "ok", provider: SOURCE, live: lc.live, dataTypes: [...SUPPORTED], subscriptions: subs.size,
+  status: "ok", provider: SOURCE, live: lc.live, dataMode: lc.mode, trial: lc.mode === "trial" ? lc.trial : undefined, dataTypes: [...SUPPORTED], subscriptions: subs.size,
   coverage: coverage().length, ingest: process.env.ROUTER_INGEST_URL ?? "mock", auth: router.authHeader() ? "on" : "off",
 }));
 
@@ -102,4 +103,4 @@ app.post("/assets/data/unsubscribe", (req, res) => {
 
 resume();
 const port = Number(process.env.PORT ?? 4100);
-app.listen(port, () => console.log(`[adapter] LunarCrush FinP2P data adapter on :${port} (${lc.live ? "LIVE" : "fixture"} mode, ingest=${process.env.ROUTER_INGEST_URL ?? "mock"}, auth=${router.authHeader() ? "jwt" : "none"})`));
+app.listen(port, () => console.log(`[adapter] LunarCrush FinP2P data adapter on :${port} (data=${lc.mode}${lc.live ? "" : "/fixture"}, ingest=${process.env.ROUTER_INGEST_URL ?? "mock"}, auth=${router.authHeader() ? "jwt" : "none"})`));

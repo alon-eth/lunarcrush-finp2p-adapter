@@ -22,12 +22,12 @@ const types = flag("--types")?.split(",").map(x => x.trim()) ?? ["socialSentimen
 const chosen = coverage().filter(a => !symbols || symbols.includes(a.target.symbol));
 if (!chosen.length) { console.error("no assets matched", symbols); process.exit(2); }
 
-const lc = new LunarCrush();
+const lc = new LunarCrush(); await lc.refreshTrialStatus();
 const assets = await build(lc, { assets: { type: "byIdentifiers", identifiers: chosen.map(a => a.identifier) }, dataTypes: types });
 const body = { requestId: randomUUID(), source: SOURCE, assets };
 const router = new RouterIngest();
 
-console.error(`[push] ${assets.length} assets, types=${types.join(",")}, lunarcrush=${lc.live ? "LIVE" : "fixture"}, target=${process.env.ROUTER_INGEST_URL ?? "mock"}, auth=${router.authHeader() ? (process.env.ROUTER_AUTH ?? "jwt") : "none"}`);
+console.error(`[push] ${assets.length} assets, types=${types.join(",")}, data=${lc.mode}${lc.live ? "" : "/fixture"}${lc.mode === "trial" && lc.live ? ` (trial remaining ${lc.trial.remaining}/${lc.trial.cap})` : ""}, target=${process.env.ROUTER_INGEST_URL ?? "mock"}, auth=${router.authHeader() ? (process.env.ROUTER_AUTH ?? "jwt") : "none"}`);
 if (dry) { console.log(JSON.stringify(body, null, 2)); process.exit(0); }
 
 try {

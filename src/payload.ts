@@ -4,7 +4,7 @@
  * one snapshot per (asset, source), a `values` map keyed by metric name.
  */
 import { coverage, resolve, type AssetIdentifier } from "./mapping.js";
-import type { LunarCrush, Snapshot } from "./lunarcrush.js";
+import { TrialExhausted, type LunarCrush, type Snapshot } from "./lunarcrush.js";
 import type { AssetDataItem, IngestRequest } from "./ingest.js";
 
 export const SOURCE = "lunarcrush";
@@ -47,10 +47,16 @@ export function toSocialSentiment(s: Snapshot) {
 export async function build(lc: LunarCrush, filter: Filter): Promise<IngestRequest["assets"]> {
   const types = filter.dataTypes.filter(t => SUPPORTED.has(t));
   const out: IngestRequest["assets"] = [];
-  for (const { identifier, target } of selectAssets(filter.assets)) {
+  let selected = selectAssets(filter.assets);
+  // trial tier: serve at most assetCap assets per push (the gateway meters calls; this keeps a Router inside the terms)
+  const cap = lc.mode === "trial" && lc.trial.enabled ? (lc.trial.assetCap ?? 50) : Infinity;
+  if (selected.length > cap) { console.error(`[adapter] trial tier: serving ${cap} of ${selected.length} requested assets (set LUNARCRUSH_API_KEY for the full catalog)`); selected = selected.slice(0, cap); }
+  for (const { identifier, target } of selected) {
     const data: AssetDataItem[] = [];
     if (types.includes("socialSentiment")) {
-      const s = await lc.snapshot(target);
+      let s: Snapshot;
+      try { s = await lc.snapshot(target); }
+      catch (e) { if (e instanceof TrialExhausted) { console.error(`[adapter] trial quota exhausted; nothing pushed for the rest of this run (${JSON.stringify(e.info)})`); break; } throw e; }
       data.push({ dataType: "socialSentiment", schemaRef: SCHEMA_REF, source: SOURCE, timestamp: s.asOf, data: toSocialSentiment(s) });
     }
     if (data.length) out.push({ identifier, data });
